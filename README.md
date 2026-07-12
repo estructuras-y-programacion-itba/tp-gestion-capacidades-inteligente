@@ -1,42 +1,145 @@
-# Trabajo Práctico: Sistema de Gestión de Capacidades y Asignación Inteligente
+# Trabajo Práctico: Sistema de Gestión de Capacidades y Asignación de Personal
 
 ## Situación Hipotética
 
-Imaginemos que son parte del equipo de desarrollo de software en *Innovación Industrial Tech (IIT)*, una empresa líder en la gestión de infraestructuras críticas y plantas de producción de alta tecnología. IIT opera en diversos sectores, desde la manufactura avanzada hasta el mantenimiento de complejos centros de datos y sistemas energéticos. La eficiencia operativa, la seguridad del personal y el cumplimiento normativo son pilares fundamentales de su negocio.
+*Innovación Industrial Tech (IIT)* necesita organizar las labores técnicas de sus plantas. En la actualidad, los supervisores coordinan al personal mediante planillas aisladas. Como consecuencia, se proponen asignaciones a personas sin las credenciales requeridas, se supera la capacidad segura de algunas áreas y resulta difícil conocer la carga semanal real de cada integrante.
 
-Actualmente, IIT enfrenta un desafío significativo: la asignación manual de su personal técnico, a las distintas labores diarias. Este proceso es ineficiente, propenso a errores y no optimiza el uso de los recursos humanos. El personal debe ser asignado a diferentes áreas de trabajo (por ejemplo, "Planta de Ensamble Robótico", "Sala de Servidores Críticos", "Mantenimiento de Líneas de Alta Tensión"), cada una con sus propias complejidades y requisitos.
+La empresa solicita un prototipo que permita registrar las condiciones de trabajo y proponer asignaciones válidas. El sistema no decide automáticamente quién debe realizar cada labor: informa qué personas son candidatas, valida una propuesta y deja su aprobación a un supervisor.
 
-Cada miembro del personal posee un conjunto único de habilidades técnicas y credenciales profesionales específicas (como "Seguridad Eléctrica Nivel 3", "Manejo de Sustancias Peligrosas", "Certificación Cisco CCNA", "Trabajo en Altura"). Estas credenciales profesionales tienen una fecha de inicio y una fecha de expiración, y es fundamental que estén activas al momento de considerar a alguien para una asignación.
+### Objetivo del sistema
 
-Las labores a realizar son diversas: desde mantenimiento preventivo, reparaciones urgentes, instalaciones de nuevos equipos, hasta supervisiones de seguridad. Cada labor tiene una duración prevista, y demanda un conjunto específico de competencias y credenciales para su ejecución segura y correcta. Además, ciertas labores solo pueden realizarse en un área de trabajo específica.
+El prototipo deberá permitir:
 
-La jornada operativa se organiza en franjas horarias (Mañana, Tarde, Noche), y cada área de trabajo tiene un límite de personal por franja para asegurar la seguridad y el espacio adecuado. La empresa busca asegurar que ningún trabajador exceda el máximo de horas laborales semanales establecido por su contrato y que siempre se respeten las regulaciones laborales.
+- registrar personal, habilidades y credenciales;
+- describir áreas, turnos y labores;
+- consultar candidatos para una labor en una fecha y un turno;
+- proponer, aprobar o rechazar asignaciones;
+- impedir asignaciones que violen requisitos técnicos, disponibilidad, capacidad del área o carga semanal.
 
-Los *Supervisores* de cada área de trabajo son responsables de validar las asignaciones finales, asegurándose de que el personal cumpla con todos los requisitos y de que las tareas se distribuyan equitativamente, o según prioridades específicas. Necesitan una herramienta que les permita visualizar rápidamente quién está disponible, quién es apto para una labor y qué labores aún no tienen asignación.
+### Alcance y vocabulario del dominio
 
-El sistema actual es ineficiente y no permite, por ejemplo, identificar rápidamente a un profesional con las credenciales activas para una labor urgente en un área específica, o determinar si un trabajador ya ha alcanzado su límite de horas semanales. Se requiere un sistema robusto que permita gestionar estas asignaciones de forma inteligente y segura.
+Los siguientes conceptos delimitan el problema, pero no prescriben una clase por cada sustantivo. Parte del trabajo consiste en decidir cómo traducir este vocabulario a objetos y cómo distribuir sus responsabilidades.
 
-Su misión es diseñar y desarrollar un prototipo de este *Sistema de Gestión de Capacidades y Asignación*, que permita automatizar y validar la asignación de personal a las diversas labores, considerando sus competencias, las credenciales activas, la disponibilidad de las áreas de trabajo y sus franjas horarias, y la carga laboral semanal de cada individuo. El diseño debe ser modular y permitir la futura incorporación de funcionalidades, como la priorización de tareas o la gestión de vacaciones.
+| Concepto | Representa | Es responsable de | No es responsable de |
+| --- | --- | --- | --- |
+| Personal | Una persona que puede realizar labores | Su identidad, habilidades, credenciales y máximo semanal | La capacidad de un área o los requisitos de una labor |
+| Supervisor | Un integrante del personal con autoridad adicional | Aprobar o rechazar asignaciones | Modificar las reglas para conseguir una aprobación |
+| Credencial | Una acreditación obtenida por una persona | Informar si está vigente en una fecha | Decidir si una persona es apta para una labor completa |
+| Área | Un espacio físico de trabajo | Credenciales de acceso y capacidad máxima por turno | El horario de un turno o la duración de una labor |
+| Turno | Una franja horaria reutilizable, por ejemplo, Mañana de 06:00 a 14:00 | Hora de inicio, hora de fin y duración | La fecha concreta y las personas asignadas |
+| Labor | Un trabajo pendiente que debe realizarse una sola vez | Duración, área, habilidades y credenciales requeridas | Elegir una persona o reservar capacidad |
+| Asignación | La propuesta de que una persona realice una labor en una fecha y un turno | Relacionar persona, labor, fecha y turno; mantener su estado | Redefinir datos de personal, área, turno o labor |
+
+Una **fecha y un turno** forman una ocurrencia concreta. Por ejemplo, el turno Mañana es una definición reutilizable; “Mañana del 18/08/2026” es la ocurrencia sobre la que se controla disponibilidad y capacidad.
+
+```mermaid
+flowchart LR
+    P[Personal] -->|posee| H[Habilidades]
+    P -->|posee con vigencia| C[Credenciales]
+    L[Labor] -->|exige| H
+    L -->|exige| C
+    L -->|se realiza en| A[Área]
+    A -->|exige para ingresar| C
+    X[Propuesta de asignación] -->|relaciona| P
+    X -->|relaciona| L
+    X -->|ocurre en| O[Fecha y turno]
+    S[Supervisión] -->|aprueba o rechaza| X
+```
+
+Este mapa solo expresa información del negocio. No determina clases, herencia, navegabilidad, colecciones ni el objeto que coordina una asignación: esas decisiones forman parte de la entrega.
+
+### Flujo principal
+
+```mermaid
+flowchart TD
+    A[Elegir labor, fecha y turno] --> B[Consultar candidatos]
+    B --> C{Hay una persona apta y disponible?}
+    C -->|No| D[Informar los motivos]
+    C -->|Sí| E[Proponer asignación]
+    E --> F{Todas las reglas siguen vigentes?}
+    F -->|No| D
+    F -->|Sí| G[Asignación pendiente]
+    G --> H{Decisión de un supervisor}
+    H -->|Aprobar| I[Asignación aprobada]
+    H -->|Rechazar| J[Asignación rechazada y recursos liberados]
+```
+
+La consulta de candidatos no modifica el sistema. Las validaciones deben repetirse al proponer y al aprobar, porque entre ambos momentos pudo cambiar otra asignación o vencer una credencial.
+
+### Fuera de alcance
+
+No se requiere desarrollar una interfaz gráfica, persistencia en base de datos, autenticación, gestión de vacaciones, división de una labor entre varias personas ni un algoritmo que optimice automáticamente el reparto. Tampoco se contemplan turnos que atraviesen la medianoche.
 
 ## Requerimientos Técnicos Obligatorios
 
+- Implementar la solución con Programación Orientada a Objetos y separar el punto de entrada de la lógica del dominio.
+- Identificar y justificar una jerarquía en la que herencia represente una verdadera relación de especialización. La facultad de supervisión es una posibilidad del dominio, no una implementación impuesta.
+- Aplicar polimorfismo en al menos un comportamiento con alternativas justificadas; por ejemplo, una política de selección u ordenamiento de candidatos. No alcanza con heredar sin sustituir comportamiento.
+- Definir excepciones propias para los incumplimientos del negocio. No se aceptan `Exception` genéricas ni mensajes impresos como único manejo del error.
+- Mantener encapsulado el estado: una asignación no puede aprobarse cambiando directamente un atributo.
+- Escribir pruebas unitarias con `pytest` para las reglas y transiciones críticas.
+- Utilizar `date`, `time` o `datetime` de la biblioteca estándar para fechas y horarios.
+
 ## Reglas de Negocio
 
-1.  **Registro y Carga Laboral del Personal:** Cada miembro del personal se identifica de forma única y posee un nombre, un repertorio de habilidades y un conjunto de credenciales profesionales. Asimismo, se le establece un límite máximo de horas de trabajo por semana que no debe ser superado. Al inicio de su registro, no tendrá horas laborales asignadas.
-2.  **Vigencia de Credenciales Profesionales:** Cada credencial profesional tiene un nombre, una fecha en que fue obtenida y otra en que caduca. Es fundamental poder determinar si una credencial está activa o vencida en un momento dado.
-3.  **Descripción de Labores:** Cada labor se describe con un identificador único, un título, una explicación detallada y una duración estimada en horas. Para su ejecución, requiere un perfil específico de habilidades y un conjunto de credenciales profesionales. Además, cada labor se adscribe a un área de trabajo concreta.
-4.  **Aptitud para la Labor:** Un trabajador solo puede ser considerado para una labor si posee *todas* las competencias exigidas por dicha labor y *todas* las credenciales profesionales requeridas que estén activas en la fecha de la asignación. De no cumplirse estos requisitos, el sistema debe indicar claramente la inaptitud del trabajador.
-5.  **Respeto por la Carga Horaria Máxima:** Al asignar una labor a un trabajador, el sistema debe asegurar que la duración prevista de la labor no supere el límite máximo de horas semanales del trabajador, tomando en cuenta las horas ya comprometidas para esa semana. Si este límite se sobrepasa, el sistema debe notificar que la carga laboral es excesiva.
-6.  **Límite de Personal por Franja Horaria y Área:** Cada franja horaria en un área de trabajo específica tiene un número máximo de personal permitido. No es posible asignar a un trabajador a una franja horaria si al hacerlo se excede la capacidad designada para esa combinación de franja y área. En tal situación, el sistema debe señalar que la franja horaria está completa.
-7.  **Exclusividad de Asignación:** Una labor particular solo puede ser confiada a *un único* trabajador para una franja horaria y fecha específica. Si se intenta volver a asignar una labor que ya ha sido comprometida para ese momento, el sistema debe advertir que la labor ya tiene una asignación.
-8.  **Facultades de Supervisión:** Los *Supervisores*, además de poder realizar labores como cualquier otro trabajador, poseen la facultad de formalizar una asignación, transformando su estatus de 'Pendiente' a 'Aprobada'.
-9.  **Contabilidad de Horas Asignadas:** Cuando una labor es exitosamente propuesta a un trabajador (previo a la formalización por parte de un supervisor), las horas previstas de esa labor deben sumarse a la carga laboral actual del trabajador para la semana.
-10. **Credenciales Obligatorias por Área:** Cada área de trabajo puede requerir un conjunto específico de credenciales profesionales que son obligatorias para cualquier trabajador que realice alguna labor en dicho espacio. Un trabajador solo podrá ser asignado a una labor en esa área si posee todas estas credenciales activas. En caso contrario, el sistema debe señalar que el trabajador no es apto para esa área.
-11. **Localización de Personal Disponible:** El sistema debe ser capaz de identificar, para una labor, franja horaria y fecha determinadas, qué trabajadores están disponibles. Esto implica que los trabajadores encontrados deben poseer las habilidades y credenciales activas (tanto las de la labor como las obligatorias del área), que la labor no los lleve a exceder su límite de horas semanales, y que la franja horaria en el área de trabajo aún tenga capacidad.
-12. **Inicio de Nueva Semana:** Al comienzo de cada nueva semana, la contabilidad de horas laborales asignadas a cada trabajador debe ser reestablecida a cero, reflejando el inicio de un nuevo ciclo.
+1. **Datos válidos:** Los identificadores de personal y labores son únicos. La duración de una labor y el máximo semanal de una persona son positivos. La capacidad de un área es un entero positivo. Un turno termina después de comenzar.
+2. **Vigencia inclusiva:** Una credencial está vigente cuando `fecha_desde <= fecha_consultada <= fecha_hasta`. Dos credenciales con el mismo nombre no otorgan beneficios adicionales.
+3. **Aptitud técnica:** Una persona es apta cuando contiene todas las habilidades requeridas por la labor y todas las credenciales exigidas tanto por la labor como por su área. Las credenciales deben estar vigentes en la fecha de la asignación.
+4. **Área determinada por la labor:** Cada labor pertenece a exactamente un área. La asignación no recibe otra área, con lo cual no puede contradecir a la labor.
+5. **Labor contenida en el turno:** La duración estimada de la labor no puede superar la duración del turno elegido. En este prototipo una labor no se divide entre turnos.
+6. **Disponibilidad personal:** Una persona no puede tener más de una asignación pendiente o aprobada en la misma fecha y turno, aunque las labores pertenezcan a áreas diferentes.
+7. **Capacidad del área:** Para una fecha y un turno, la cantidad de asignaciones pendientes o aprobadas en un área no puede superar su capacidad. Las asignaciones rechazadas no ocupan lugar.
+8. **Carga semanal:** La suma de las duraciones de las asignaciones pendientes o aprobadas de una persona, dentro de la semana calendario de la nueva asignación, no puede superar su máximo semanal. La semana comienza el lunes.
+9. **Unicidad de la labor:** Una labor puede tener, como máximo, una asignación pendiente o aprobada. Si una propuesta es rechazada, la labor vuelve a quedar disponible para otra propuesta.
+10. **Transiciones permitidas:** Una asignación nace `PENDIENTE`. Solo puede pasar de `PENDIENTE` a `APROBADA` o `RECHAZADA`; ambos estados son finales.
+11. **Autoridad de supervisión:** Solo un supervisor puede aprobar o rechazar. Antes de aprobar, el sistema vuelve a evaluar aptitud, disponibilidad, capacidad y carga semanal. Si alguna condición dejó de cumplirse, conserva el estado pendiente e informa el motivo.
+12. **Consulta de candidatos:** Para una labor, fecha y turno, el sistema devuelve únicamente personal que satisfaga las reglas 3, 5, 6, 8 y para quien el área conserve capacidad. La consulta no crea asignaciones ni altera horas o cupos.
+
+### Ejemplo de aceptación
+
+El área “Sala Eléctrica” admite dos personas por turno y exige la credencial “Seguridad Eléctrica”. La labor `L-17` dura tres horas, requiere la habilidad “diagnóstico” y se realiza en esa área. Ana tiene la habilidad y una credencial vigente, trabaja como máximo ocho horas semanales y ya posee una asignación de seis horas esa semana. Bruno cumple los requisitos técnicos, pero ya tiene otra asignación en el turno solicitado.
+
+Al consultar candidatos para `L-17`, Ana queda excluida porque alcanzaría nueve horas y Bruno queda excluido por falta de disponibilidad. El resultado debe estar vacío e incluir motivos que permitan distinguir ambos casos. Si se rechaza la asignación previa de Bruno, una nueva consulta debe incluirlo sin modificar todavía su carga ni la capacidad del área.
+
+### Pruebas mínimas esperadas
+
+- vigencia de una credencial en ambas fechas límite y fuera de ellas;
+- falta de una habilidad, credencial de labor o credencial de área;
+- superación de la capacidad del área;
+- doble asignación de una persona y doble asignación de una labor;
+- carga semanal justo en el límite y por encima de él;
+- aprobación por personal común y transición desde un estado final;
+- liberación de cupo, labor y carga luego de un rechazo;
+- consulta de candidatos sin efectos secundarios.
+
+### Decisiones de diseño que deberán resolver
+
+El enunciado define qué debe ocurrir, pero deliberadamente no responde estas preguntas:
+
+- ¿Qué objeto conoce el conjunto de asignaciones y coordina una nueva propuesta?
+- ¿La carga semanal se calcula a partir de las asignaciones o se mantiene como estado? ¿Cómo se evita que ambas fuentes se contradigan?
+- ¿Cómo se representan habilidades y credenciales para comparar requisitos sin duplicar lógica?
+- ¿Cómo se comunican varios motivos de inaptitud sin acoplar el dominio a `print` o a una interfaz futura?
+- ¿Dónde se ubican las transiciones de estado para impedir cambios inválidos?
+- ¿Qué comportamiento conviene hacer polimórfico para incorporar nuevas políticas de selección sin modificar el núcleo?
+
+No existe una única respuesta correcta. Se evaluarán la coherencia del modelo, el reparto de responsabilidades, el bajo acoplamiento y la capacidad de defender las decisiones con pruebas.
+
+### Evolución durante el semestre
+
+El trabajo se desarrollará de manera incremental. Cada etapa debe conservar las pruebas de las anteriores y puede exigir refactorizaciones del diseño.
+
+1. **Modelo inicial:** vocabulario, diagrama propio, invariantes y primeros objetos sin automatizar asignaciones.
+2. **Núcleo de asignación:** aptitud, disponibilidad, capacidad, carga semanal y excepciones.
+3. **Ciclo de aprobación:** estados, permisos, liberación de recursos y consultas sin efectos secundarios.
+4. **Variación de comportamiento:** al menos dos políticas intercambiables para ordenar candidatos, por ejemplo menor carga semanal y mayor cantidad de credenciales vigentes. El ordenamiento no elige ni asigna automáticamente.
+5. **Cambio controlado:** la cátedra seleccionará una extensión —por ejemplo cancelación de una asignación aprobada, ausencias o capacidades diferentes según el turno— para evaluar qué tan bien evoluciona el modelo.
+
+En cada etapa deberán entregar pruebas nuevas y una breve actualización del diagrama y de las decisiones de diseño afectadas.
 
 ## Notas
+
 - Se prohíbe el uso de la librería pandas; el objetivo es evaluar el manejo de estructuras nativas (listas, diccionarios) y la lógica de algoritmos manuales.
-- Es requisito obligatorio presentar un diagrama de flujo previo a la codificación para organizar la arquitectura lógica y prevenir fallos de diseño.
-- Cada implementación debe estar debidamente sustentada; el alumno debe ser capaz de explicar y justificar técnicamente las decisiones tomadas en el código.
-- Se recomienda el uso de la librería estándar de Python (como datetime o math) para optimizar tareas específicas y evitar la redacción innecesaria de funciones ya existentes.
+- Antes de codificar, presenten un diagrama que muestre las responsabilidades y relaciones entre los conceptos del dominio. Puede ser un diagrama de clases o una alternativa equivalente debidamente justificada.
+- Cada implementación debe estar sustentada: deberán explicar las decisiones tomadas y demostrar las reglas mediante pruebas automatizadas.
+- Se permite usar la biblioteca estándar de Python. No se permite incorporar una librería que resuelva automáticamente la asignación.
