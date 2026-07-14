@@ -2,7 +2,7 @@
 
 ## Situación Hipotética
 
-*Innovación Industrial Tech (IIT)* necesita organizar las labores técnicas de sus plantas. En la actualidad, los supervisores coordinan al personal mediante planillas aisladas. Como consecuencia, se proponen asignaciones a personas sin las credenciales requeridas, se supera la capacidad segura de algunas áreas y resulta difícil conocer la carga semanal real de cada integrante.
+*Innovación Industrial Tech (IIT)* necesita organizar las labores técnicas de sus plantas. En la actualidad, los supervisores coordinan al personal mediante planillas aisladas. Como consecuencia, se proponen asignaciones a personas sin las credenciales requeridas, se supera la capacidad segura de algunas áreas y resulta difícil conocer la carga diaria y semanal real de cada integrante.
 
 La empresa solicita un prototipo que permita registrar las condiciones de trabajo y proponer asignaciones válidas. El sistema no decide automáticamente quién debe realizar cada labor: informa qué personas son candidatas, valida una propuesta y deja su aprobación a un supervisor.
 
@@ -14,7 +14,7 @@ El prototipo deberá permitir:
 - describir áreas, turnos y labores;
 - consultar candidatos para una labor en una fecha y un turno;
 - proponer, aprobar o rechazar asignaciones;
-- impedir asignaciones que violen requisitos técnicos, disponibilidad, capacidad del área o carga semanal.
+- impedir asignaciones que violen requisitos técnicos, disponibilidad, capacidad del área o carga horaria diaria y semanal.
 
 ### Alcance y vocabulario del dominio
 
@@ -22,10 +22,10 @@ Los siguientes conceptos delimitan el problema, pero no prescriben una clase por
 
 | Concepto | Representa | Es responsable de | No es responsable de |
 | --- | --- | --- | --- |
-| Personal | Una persona que puede realizar labores | Su identidad, habilidades, credenciales y máximo semanal | La capacidad de un área o los requisitos de una labor |
-| Supervisor | Un integrante del personal con autoridad adicional | Aprobar o rechazar asignaciones | Modificar las reglas para conseguir una aprobación |
+| Personal | Una persona que puede realizar labores | Su identidad, habilidades, credenciales y máximos diario y semanal | La capacidad de un área o los requisitos de una labor |
+| Supervisor | Un integrante del personal con autoridad adicional y áreas bajo su responsabilidad | Aprobar o rechazar asignaciones y recibir notificaciones sobre sus áreas | Modificar las reglas para conseguir una aprobación |
 | Credencial | Una acreditación obtenida por una persona | Informar si está vigente en una fecha | Decidir si una persona es apta para una labor completa |
-| Área | Un espacio físico de trabajo | Credenciales de acceso y capacidad máxima por turno | El horario de un turno o la duración de una labor |
+| Área | Un espacio físico de trabajo a cargo de un supervisor | Credenciales de acceso, capacidad máxima por turno y supervisor responsable | El horario de un turno o la duración de una labor |
 | Turno | Una franja horaria reutilizable, por ejemplo, Mañana de 06:00 a 14:00 | Hora de inicio, hora de fin y duración | La fecha concreta y las personas asignadas |
 | Labor | Un trabajo pendiente que debe realizarse una sola vez | Duración, área, habilidades y credenciales requeridas | Elegir una persona o reservar capacidad |
 | Asignación | La propuesta de que una persona realice una labor en una fecha y un turno | Relacionar persona, labor, fecha y turno; mantener su estado | Redefinir datos de personal, área, turno o labor |
@@ -61,10 +61,10 @@ flowchart TD
     F -->|Sí| G[Asignación pendiente]
     G --> H{Decisión de un supervisor}
     H -->|Aprobar| I[Asignación aprobada]
-    H -->|Rechazar| J[Asignación rechazada y recursos liberados]
+    H -->|Rechazar| J[Asignación rechazada; labor y carga liberadas]
 ```
 
-La consulta de candidatos no modifica el sistema. Las validaciones deben repetirse al proponer y al aprobar, porque entre ambos momentos pudo cambiar otra asignación o vencer una credencial.
+La consulta de candidatos no modifica el sistema. Las validaciones deben repetirse al proponer y al aprobar, porque entre ambos momentos pudo aprobarse otra asignación o vencer una credencial.
 
 ### Fuera de alcance
 
@@ -82,18 +82,18 @@ No se requiere desarrollar una interfaz gráfica, persistencia en base de datos,
 
 ## Reglas de Negocio
 
-1. **Datos válidos:** Los identificadores de personal y labores son únicos. La duración de una labor y el máximo semanal de una persona son positivos. La capacidad de un área es un entero positivo. Un turno termina después de comenzar.
+1. **Datos válidos:** Los identificadores de personal y labores son únicos. La duración de una labor y los máximos diario y semanal de una persona son positivos. Cada persona configura sus propios máximos, pero el diario no puede superar las 8 horas y el semanal no puede superar las 40 horas. La capacidad de un área es un entero positivo. Un turno termina después de comenzar.
 2. **Vigencia inclusiva:** Una credencial está vigente cuando `fecha_desde <= fecha_consultada <= fecha_hasta`. Dos credenciales con el mismo nombre no otorgan beneficios adicionales.
 3. **Aptitud técnica:** Una persona es apta cuando contiene todas las habilidades requeridas por la labor y todas las credenciales exigidas tanto por la labor como por su área. Las credenciales deben estar vigentes en la fecha de la asignación.
 4. **Área determinada por la labor:** Cada labor pertenece a exactamente un área. La asignación no recibe otra área, con lo cual no puede contradecir a la labor.
 5. **Labor contenida en el turno:** La duración estimada de la labor no puede superar la duración del turno elegido. En este prototipo una labor no se divide entre turnos.
 6. **Disponibilidad personal:** Una persona no puede tener más de una asignación pendiente o aprobada en la misma fecha y turno, aunque las labores pertenezcan a áreas diferentes.
-7. **Capacidad del área:** Para una fecha y un turno, la cantidad de asignaciones pendientes o aprobadas en un área no puede superar su capacidad. Las asignaciones rechazadas no ocupan lugar.
-8. **Carga semanal:** La suma de las duraciones de las asignaciones pendientes o aprobadas de una persona, dentro de la semana calendario de la nueva asignación, no puede superar su máximo semanal. La semana comienza el lunes.
+7. **Capacidad del área:** Para una fecha y un turno, la cantidad de asignaciones aprobadas en un área no puede superar su capacidad. Las asignaciones pendientes o rechazadas no ocupan lugar. Por lo tanto, varias propuestas pendientes pueden competir por el último cupo disponible; al aprobar una de ellas, las demás deberán volver a validar la capacidad.
+8. **Carga diaria y semanal:** La suma de las duraciones de las asignaciones pendientes o aprobadas de una persona no puede superar su máximo diario en la fecha de la nueva asignación ni su máximo semanal dentro de la semana calendario correspondiente. La semana comienza el lunes. Si una propuesta supera alguno de estos límites, el sistema rechaza la operación sin crear la asignación e informa el motivo al supervisor responsable del área de la labor.
 9. **Unicidad de la labor:** Una labor puede tener, como máximo, una asignación pendiente o aprobada. Si una propuesta es rechazada, la labor vuelve a quedar disponible para otra propuesta.
 10. **Transiciones permitidas:** Una asignación nace `PENDIENTE`. Solo puede pasar de `PENDIENTE` a `APROBADA` o `RECHAZADA`; ambos estados son finales.
-11. **Autoridad de supervisión:** Solo un supervisor puede aprobar o rechazar. Antes de aprobar, el sistema vuelve a evaluar aptitud, disponibilidad, capacidad y carga semanal. Si alguna condición dejó de cumplirse, conserva el estado pendiente e informa el motivo.
-12. **Consulta de candidatos:** Para una labor, fecha y turno, el sistema devuelve únicamente personal que satisfaga las reglas 3, 5, 6, 8 y para quien el área conserve capacidad. La consulta no crea asignaciones ni altera horas o cupos.
+11. **Autoridad de supervisión:** Solo un supervisor puede aprobar o rechazar. Antes de aprobar, el sistema vuelve a evaluar aptitud, disponibilidad, capacidad y carga diaria y semanal. Si alguna condición dejó de cumplirse, conserva el estado pendiente e informa el motivo al supervisor que intentó aprobarla.
+12. **Consulta de candidatos:** Para una labor, fecha y turno, el sistema devuelve únicamente personal que satisfaga las reglas 3, 5, 6 y 8, siempre que la cantidad de asignaciones aprobadas todavía no haya alcanzado la capacidad del área. La consulta no crea asignaciones ni altera horas o cupos.
 
 ### Ejemplo de aceptación
 
@@ -105,11 +105,12 @@ Al consultar candidatos para `L-17`, Ana queda excluida porque alcanzaría nueve
 
 - vigencia de una credencial en ambas fechas límite y fuera de ellas;
 - falta de una habilidad, credencial de labor o credencial de área;
-- superación de la capacidad del área;
+- capacidad del área ocupada solo por asignaciones aprobadas y conflicto entre propuestas pendientes al aprobar;
 - doble asignación de una persona y doble asignación de una labor;
-- carga semanal justo en el límite y por encima de él;
+- carga diaria y semanal justo en cada límite y por encima de ellos;
+- rechazo de una propuesta que exceda la carga configurada y notificación al supervisor responsable del área;
 - aprobación por personal común y transición desde un estado final;
-- liberación de cupo, labor y carga luego de un rechazo;
+- liberación de la labor y la carga luego de rechazar una asignación pendiente, sin alterar la capacidad ocupada;
 - consulta de candidatos sin efectos secundarios.
 
 ### Decisiones de diseño que deberán resolver
@@ -117,7 +118,7 @@ Al consultar candidatos para `L-17`, Ana queda excluida porque alcanzaría nueve
 El enunciado define qué debe ocurrir, pero deliberadamente no responde estas preguntas:
 
 - ¿Qué objeto conoce el conjunto de asignaciones y coordina una nueva propuesta?
-- ¿La carga semanal se calcula a partir de las asignaciones o se mantiene como estado? ¿Cómo se evita que ambas fuentes se contradigan?
+- ¿La carga diaria y semanal se calcula a partir de las asignaciones o se mantiene como estado? ¿Cómo se evita que ambas fuentes se contradigan?
 - ¿Cómo se representan habilidades y credenciales para comparar requisitos sin duplicar lógica?
 - ¿Cómo se comunican varios motivos de inaptitud sin acoplar el dominio a `print` o a una interfaz futura?
 - ¿Dónde se ubican las transiciones de estado para impedir cambios inválidos?
@@ -130,7 +131,7 @@ No existe una única respuesta correcta. Se evaluarán la coherencia del modelo,
 El trabajo se desarrollará de manera incremental. Cada etapa debe conservar las pruebas de las anteriores y puede exigir refactorizaciones del diseño.
 
 1. **Modelo inicial:** vocabulario, diagrama propio, invariantes y primeros objetos sin automatizar asignaciones.
-2. **Núcleo de asignación:** aptitud, disponibilidad, capacidad, carga semanal y excepciones.
+2. **Núcleo de asignación:** aptitud, disponibilidad, capacidad, carga diaria y semanal, notificaciones y excepciones.
 3. **Ciclo de aprobación:** estados, permisos, liberación de recursos y consultas sin efectos secundarios.
 4. **Variación de comportamiento:** al menos dos políticas intercambiables para ordenar candidatos, por ejemplo menor carga semanal y mayor cantidad de credenciales vigentes. El ordenamiento no elige ni asigna automáticamente.
 5. **Cambio controlado:** la cátedra seleccionará una extensión —por ejemplo cancelación de una asignación aprobada, ausencias o capacidades diferentes según el turno— para evaluar qué tan bien evoluciona el modelo.
